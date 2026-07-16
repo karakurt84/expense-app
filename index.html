@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial=1,maximum-scale=1,user-scalable=no">
 <title>Учёт расходов</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
@@ -94,6 +95,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2
 /* Toast */
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:12px 24px;border-radius:12px;font-weight:600;font-size:.9rem;opacity:0;transition:.3s;pointer-events:none;z-index:100}
 .toast.show{opacity:1}
+
+/* QR Scanner */
+.scan-btn{width:100%;padding:14px;border-radius:12px;border:2px dashed #3b82f6;background:#0f172a;color:#3b82f6;font-size:1rem;font-weight:600;cursor:pointer;transition:.15s;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+.scan-btn:active{background:#1e3a5f;transform:scale(.98)}
+.scan-btn .scan-icon{font-size:1.3rem}
+.qr-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:200;flex-direction:column;align-items:center;justify-content:center}
+.qr-modal.open{display:flex}
+.qr-modal .close-btn{position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer;padding:8px;z-index:210}
+.qr-modal .scan-area{width:100%;max-width:350px;aspect-ratio:1;border-radius:16px;overflow:hidden;background:#000}
+.qr-modal .hint{color:#94a3b8;font-size:.85rem;margin-top:16px;text-align:center}
+#qr-reader{width:100%!important;border:none!important}
+#qr-reader video{border-radius:12px!important;object-fit:cover!important}
 </style>
 </head>
 <body>
@@ -119,6 +132,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2
 
 <div class="add-card">
 <h3>Добавить расход</h3>
+
+<button class="scan-btn" onclick="openScanner()"><span class="scan-icon">📷</span> Сканировать чек</button>
 
 <div class="cat-grid" id="catGrid">
 <div class="cat-btn active" data-cat="Еда" onclick="selectCat(this)"><span class="icon">🛒</span><span class="name">Еда</span></div>
@@ -170,6 +185,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2
 
 <div class="toast" id="toast">✓ Добавлено</div>
 
+<div class="qr-modal" id="qrModal">
+<button class="close-btn" onclick="closeScanner()">✕</button>
+<div class="scan-area"><div id="qr-reader"></div></div>
+<div class="hint">Наведи камеру на QR-код чека</div>
+</div>
+
 <script>
 const IMPORT_DATA={"settings":{"salary":0,"payday":15},"expenses":[{"id":1783962000080,"category":"Еда","amount":1232.73,"description":"Мария-Ра","date":"2026-07-14T00:00:00"},{"id":1783962000081,"category":"Еда","amount":95.98,"description":"Три батона","date":"2026-07-14T00:00:00"},{"id":1783962000082,"category":"Еда","amount":39.9,"description":"Новекс","date":"2026-07-14T00:00:00"},{"id":1783962000083,"category":"Развлечения","amount":100,"description":"Алёна","date":"2026-07-14T00:00:00"},{"id":1783962000084,"category":"Еда","amount":1878.9,"description":"Мария-Ра","date":"2026-07-14T00:00:00"},{"id":1783875600064,"category":"Прочее","amount":18967.59,"description":"Кредит","date":"2026-07-13T00:00:00"},{"id":1783875600065,"category":"Здоровье","amount":1475,"description":"Аптека","date":"2026-07-13T00:00:00"},{"id":1783875600066,"category":"Еда","amount":385,"description":"Мария-Ра","date":"2026-07-13T00:00:00"},{"id":1783875600067,"category":"Еда","amount":107,"description":"Три батона","date":"2026-07-13T00:00:00"},{"id":1783875600068,"category":"Еда","amount":139.98,"description":"Бристоль","date":"2026-07-13T00:00:00"},{"id":1783789200069,"category":"Еда","amount":1435.63,"description":"Мария-Ра","date":"2026-07-12T00:00:00"},{"id":1783789200070,"category":"Еда","amount":350.95,"description":"Ярче","date":"2026-07-12T00:00:00"},{"id":1783789200078,"category":"Еда","amount":1853.79,"description":"Пятерочка","date":"2026-07-12T00:00:00"},{"id":1783789200079,"category":"Еда","amount":2350.93,"description":"Мария-Ра","date":"2026-07-12T00:00:00"},{"id":1783702800071,"category":"Еда","amount":1543.71,"description":"Новекс","date":"2026-07-11T00:00:00"},{"id":1783702800075,"category":"Еда","amount":576.3,"description":"Три батона","date":"2026-07-11T00:00:00"},{"id":1783616400072,"category":"Еда","amount":1371.06,"description":"Мария-Ра","date":"2026-07-10T00:00:00"},{"id":1783616400076,"category":"Прочее","amount":24941.24,"description":"Списание Приставы","date":"2026-07-10T00:00:00"},{"id":1783616400077,"category":"Прочее","amount":5600,"description":"Штраф Шерегеш","date":"2026-07-10T00:00:00"},{"id":1783530000073,"category":"Еда","amount":1670.28,"description":"Мария-Ра","date":"2026-07-09T00:00:00"},{"id":1783530000074,"category":"Еда","amount":107.98,"description":"Три батона","date":"2026-07-09T00:00:00"},{"id":1783443600061,"category":"Прочее","amount":2004,"description":"Заправка","date":"2026-07-08T00:00:00"},{"id":1783443600062,"category":"Еда","amount":1392.12,"description":"Мария-Ра","date":"2026-07-08T00:00:00"},{"id":1783270800060,"category":"Еда","amount":169.99,"description":"Бегемот","date":"2026-07-06T00:00:00"},{"id":1783270800063,"category":"Еда","amount":1175.19,"description":"Мария-Ра","date":"2026-07-06T00:00:00"},{"id":1783184400059,"category":"Еда","amount":824.7,"description":"Мария-Ра","date":"2026-07-05T00:00:00"},{"id":1783098000054,"category":"Связь","amount":300,"description":"Мегафон","date":"2026-07-04T00:00:00"},{"id":1783098000055,"category":"Развлечения","amount":280,"description":"Табок","date":"2026-07-04T00:00:00"},{"id":1783098000056,"category":"Еда","amount":473.2,"description":"Мария-Ра","date":"2026-07-04T00:00:00"},{"id":1783098000057,"category":"Развлечения","amount":800,"description":"Березово","date":"2026-07-04T00:00:00"},{"id":1783098000058,"category":"Еда","amount":821.9,"description":"Мария-Ра","date":"2026-07-04T00:00:00"},{"id":1783011600045,"category":"Развлечения","amount":88,"description":"Авито","date":"2026-07-03T00:00:00"},{"id":1783011600046,"category":"Прочее","amount":3450,"description":"Саленая печера","date":"2026-07-03T00:00:00"},{"id":1783011600047,"category":"Связь","amount":300,"description":"Мегафон","date":"2026-07-03T00:00:00"},{"id":1783011600048,"category":"Еда","amount":1700,"description":"Пвндок","date":"2026-07-03T00:00:00"},{"id":1783011600049,"category":"Еда","amount":375.97,"description":"Поляна","date":"2026-07-03T00:00:00"},{"id":1783011600050,"category":"Развлечения","amount":375.97,"description":"Краска","date":"2026-07-03T00:00:00"},{"id":1783011600051,"category":"Еда","amount":997.94,"description":"Мария-Ра","date":"2026-07-03T00:00:00"},{"id":1783011600052,"category":"Развлечения","amount":1270,"description":"Озон","date":"2026-07-03T00:00:00"},{"id":1783011600053,"category":"Здоровье","amount":384,"description":"Аптека","date":"2026-07-03T00:00:00"},{"id":1782925200043,"category":"Еда","amount":101,"description":"Спар","date":"2026-07-02T00:00:00"},{"id":1782925200044,"category":"Еда","amount":1380.85,"description":"Ярче","date":"2026-07-02T00:00:00"},{"id":1782838800033,"category":"Связь","amount":1320,"description":"Гудлайн","date":"2026-07-01T00:00:00"},{"id":1782838800035,"category":"Связь","amount":600,"description":"Мегафон","date":"2026-07-01T00:00:00"},{"id":1782838800036,"category":"Еда","amount":387.47,"description":"Мария-Ра","date":"2026-07-01T00:00:00"},{"id":1782838800037,"category":"Еда","amount":1417.36,"description":"Мария-Ра","date":"2026-07-01T00:00:00"},{"id":1782838800038,"category":"Еда","amount":437.88,"description":"Три батона","date":"2026-07-01T00:00:00"},{"id":1782838800039,"category":"Прочее","amount":2000,"description":"Тативик","date":"2026-07-01T00:00:00"},{"id":1782838800040,"category":"Прочее","amount":3000,"description":"Мама банк","date":"2026-07-01T00:00:00"},{"id":1782838800041,"category":"Прочее","amount":13500,"description":"Ольга","date":"2026-07-01T00:00:00"},{"id":1782838800042,"category":"Еда","amount":141,"description":"Спар","date":"2026-07-01T00:00:00"},{"id":1782752400034,"category":"Еда","amount":1695.44,"description":"Мария-Ра","date":"2026-06-30T00:00:00"},{"id":1782666000021,"category":"Прочее","amount":13300,"description":"Кредит","date":"2026-06-29T00:00:00"},{"id":1782666000024,"category":"Еда","amount":119,"description":"Обед","date":"2026-06-29T00:00:00"},{"id":1782666000025,"category":"Прочее","amount":1666.25,"description":"Заправка","date":"2026-06-29T00:00:00"},{"id":1782666000026,"category":"Еда","amount":1308.91,"description":"Светафор","date":"2026-06-29T00:00:00"},{"id":1782666000027,"category":"Здоровье","amount":153,"description":"Крем","date":"2026-06-29T00:00:00"},{"id":1782666000028,"category":"Развлечения","amount":49.99,"description":"Новекс","date":"2026-06-29T00:00:00"},{"id":1782666000029,"category":"Еда","amount":559.44,"description":"Мария-Ра","date":"2026-06-29T00:00:00"},{"id":1782666000030,"category":"Еда","amount":490,"description":"Курилка","date":"2026-06-29T00:00:00"},{"id":1782493200014,"category":"Еда","amount":489.82,"description":"Мария-Ра","date":"2026-06-27T00:00:00"},{"id":1782493200015,"category":"Еда","amount":1127.28,"description":"Бристооль","date":"2026-06-27T00:00:00"},{"id":1782493200016,"category":"Еда","amount":800,"description":"Бревери","date":"2026-06-27T00:00:00"},{"id":1782493200017,"category":"Еда","amount":218.42,"description":"Бревери","date":"2026-06-27T00:00:00"},{"id":1782493200020,"category":"Прочее","amount":20000,"description":"Кредит","date":"2026-06-27T00:00:00"},{"id":1782406800013,"category":"Еда","amount":169.97,"description":"Бегемот","date":"2026-06-26T00:00:00"},{"id":1782406800018,"category":"Еда","amount":1200.23,"description":"Мария-Ра","date":"2026-06-26T00:00:00"},{"id":1782406800019,"category":"Еда","amount":49.99,"description":"Три батона","date":"2026-06-26T00:00:00"},{"id":1782406800022,"category":"Развлечения","amount":90,"description":"Проезд","date":"2026-06-26T00:00:00"},{"id":1782406800023,"category":"Еда","amount":238,"description":"Обед","date":"2026-06-26T00:00:00"},{"id":1782406800031,"category":"Прочее","amount":12859,"description":"Долг","date":"2026-06-26T00:00:00"},{"id":1782406800032,"category":"Прочее","amount":12859,"description":"Кредит Сбер","date":"2026-06-26T00:00:00"},{"id":1782320400010,"category":"Прочее","amount":1700,"description":"ДР Анна","date":"2026-06-25T00:00:00"},{"id":1782320400011,"category":"Еда","amount":169.99,"description":"Бегемот","date":"2026-06-25T00:00:00"},{"id":1782320400012,"category":"Еда","amount":674.11,"description":"Мария-Ра","date":"2026-06-25T00:00:00"},{"id":1782234000007,"category":"Еда","amount":159,"description":"Бегемот","date":"2026-06-24T00:00:00"},{"id":1782234000008,"category":"Еда","amount":654.47,"description":"Мария-Ра","date":"2026-06-24T00:00:00"},{"id":1782147600009,"category":"Еда","amount":112.6,"description":"Мария-Ра","date":"2026-06-23T00:00:00"},{"id":1781542800006,"category":"Прочее","amount":2694,"description":"Заправка","date":"2026-06-16T00:00:00"},{"id":1779469200000,"category":"Еда","amount":572.75,"description":"Мария-Ра","date":"2026-05-23T00:00:00"},{"id":1779382800001,"category":"Еда","amount":115.98,"description":"Три батона","date":"2026-05-22T00:00:00"},{"id":1779382800002,"category":"Еда","amount":737.1,"description":"Ярче","date":"2026-05-22T00:00:00"},{"id":1779296400005,"category":"Прочее","amount":980,"description":"Масло","date":"2026-05-21T00:00:00"},{"id":1779037200004,"category":"Прочее","amount":1690,"description":"Заправка","date":"2026-05-18T00:00:00"},{"id":1778173200003,"category":"Прочее","amount":3020,"description":"Заправка","date":"2026-05-08T00:00:00"}]};
 
@@ -197,6 +218,63 @@ function setFilter(f,el){
   document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   updateUI(getExpenses(),getSettings().salary||0,getSettings().payday||15);
+}
+
+let qrScanner=null;
+
+function openScanner(){
+  document.getElementById('qrModal').classList.add('open');
+  qrScanner=new Html5Qrcode('qr-reader');
+  qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:250}},onScanSuccess,()=>{}).catch(()=>{});
+}
+
+function closeScanner(){
+  if(qrScanner){qrScanner.stop().then(()=>{qrScanner.clear();qrScanner=null}).catch(()=>{})}
+  document.getElementById('qrModal').classList.remove('open');
+}
+
+function onScanSuccess(text){
+  closeScanner();
+  const parsed=parseReceipt(text);
+  if(parsed){
+    document.getElementById('amtIn').value=parsed.amount||'';
+    document.getElementById('descIn').value=parsed.description||'';
+    if(parsed.date)document.getElementById('dateIn').value=parsed.date;
+    if(parsed.category){
+      const btn=document.querySelector(`[data-cat="${parsed.category}"]`);
+      if(btn)selectCat(btn);
+    }
+    showToast(`Чек: ${parsed.amount}₽ · ${parsed.description||''}`);
+  }else{
+    showToast('QR распознан, но формат неизвестен');
+    document.getElementById('descIn').value=text.slice(0,50);
+  }
+}
+
+function parseReceipt(text){
+  try{
+    const u=new URL(text);
+    if(u.hostname.includes('check.fiscal.ru')||u.hostname.includes('qr.nalog.ru')){
+      const p=u.searchParams;
+      const sum=p.get('sum')||p.get('s');
+      const desc=p.get('n')||p.get('fn')||'';
+      const d=p.get('t');
+      let date='';
+      if(d){
+        const dt=new Date(d);
+        if(!isNaN(dt))date=dt.toISOString().slice(0,10);
+      }
+      if(sum)return{amount:Math.round(parseFloat(sum.replace(',','.'))*100)/100,description:desc.replace(/\+/g,' '),date,category:'Прочее'};
+    }
+    const params=new URLSearchParams(text.replace(/&/g,'&'));
+    const sum=params.get('sum')||params.get('s');
+    if(sum)return{amount:Math.round(parseFloat(sum)*100)/100,description:'Чек',date:new Date().toISOString().slice(0,10),category:'Прочее'};
+  }catch(e){}
+  if(text.includes('sum=')){
+    const m=text.match(/sum[=:](\d+[\.,]?\d*)/);
+    if(m)return{amount:parseFloat(m[1].replace(',','.')),description:'Чек',date:new Date().toISOString().slice(0,10),category:'Прочее'};
+  }
+  return null;
 }
 
 function fetchData(){
