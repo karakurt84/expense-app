@@ -96,116 +96,69 @@ h1{text-align:center;font-size:2rem;margin-bottom:28px;color:#f1f5f9}
 const C={Еда:'#f97171',Транспорт:'#3b82f6',Жильё:'#8b5cf6',Развлечения:'#ec4899',Одежда:'#14b8a6',Здоровье:'#ef4444',Образование:'#eab308',Связь:'#06b6d4',Прочее:'#64748b'};
 let c1,c2;
 
-async function fetchData() {
-  try {
-    const settingsRes = await fetch('http://localhost:8000/settings/283'); // ID 283 для каракурта
-    const settingsData = await settingsRes.json();
-    
-    const expensesRes = await fetch('http://localhost:8000/expenses/283');
-    const expenses = await expensesRes.json();
+function getSettings(){return JSON.parse(localStorage.getItem('exp_settings')||'{"salary":0,"payday":15}')}
+function saveSettingsData(s){localStorage.setItem('exp_settings',JSON.stringify(s))}
+function getExpenses(){return JSON.parse(localStorage.getItem('exp_list')||'[]')}
+function saveExpenses(e){localStorage.setItem('exp_list',JSON.stringify(e))}
 
-    document.getElementById('salaryIn').value = settingsData.salary || '';
-    document.getElementById('paydayIn').value = settingsData.payday || 15;
-
-    updateUI(expenses, settingsData.salary || 0, settingsData.payday || 15);
-  } catch (e) {
-    console.error("Ошибка получения данных:", e);
-    document.getElementById('list').innerHTML = '<div class="empty">Ошибка подключения к серверу</div>';
-  }
+function fetchData(){
+  const s=getSettings();
+  document.getElementById('salaryIn').value=s.salary||'';
+  document.getElementById('paydayIn').value=s.payday||15;
+  updateUI(getExpenses(),s.salary||0,s.payday||15);
 }
 
-async function saveSettings() {
-  const salary = +document.getElementById('salaryIn').value || 0;
-  const payday = +document.getElementById('paydayIn').value || 15;
-  await fetch(`http://localhost:8000/settings/283`, {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({salary, payday})
-  });
+function saveSettings(){
+  const salary=+document.getElementById('salaryIn').value||0;
+  const payday=+document.getElementById('paydayIn').value||15;
+  saveSettingsData({salary,payday});
   fetchData();
 }
 
-async function addExp() {
-  const amount = +document.getElementById('amtIn').value;
-  if(!amount) return;
-  
-  const payload = {
-    category: document.getElementById('catIn').value,
-    amount: amount,
-    description: document.getElementById('descIn').value.trim(),
-    user_id: 283
-  };
-
-  await fetch('http://localhost:8000/expenses/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
-
-  document.getElementById('amtIn').value = '';
-  document.getElementById('descIn').value = '';
+function addExp(){
+  const amount=+document.getElementById('amtIn').value;
+  if(!amount)return;
+  const exp=getExpenses();
+  exp.push({id:Date.now(),category:document.getElementById('catIn').value,amount,description:document.getElementById('descIn').value.trim(),date:new Date().toISOString()});
+  saveExpenses(exp);
+  document.getElementById('amtIn').value='';
+  document.getElementById('descIn').value='';
   fetchData();
 }
 
-function updateUI(expenses, salary, payday) {
-  const now = new Date();
-  const currentMonthExpenses = expenses.filter(e => {
-    const d = new Date(e.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
+function delExp(id){
+  saveExpenses(getExpenses().filter(e=>e.id!==id));
+  fetchData();
+}
 
-  const spent = currentMonthExpenses.reduce((s, e) => s + e.amount, 0);
-  const rem = Math.max(0, salary - spent);
-  
-  let nextPayday = new Date(now.getFullYear(), now.getMonth(), payday);
-  if (now.getDate() >= payday) nextPayday.setMonth(nextPayday.getMonth() + 1);
-  const daysLeft = Math.ceil((nextPayday - now) / 86400000);
-  const daily = daysLeft ? rem / daysLeft : 0;
+function updateUI(expenses,salary,payday){
+  const now=new Date();
+  const cur=expenses.filter(e=>{const d=new Date(e.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()});
+  const spent=cur.reduce((s,e)=>s+e.amount,0);
+  const rem=Math.max(0, salary-spent);
+  let next=new Date(now.getFullYear(),now.getMonth(),payday);
+  if(now.getDate()>=payday)next.setMonth(next.getMonth()+1);
+  const days=Math.ceil((next-now)/864e5);
+  const daily=days?rem/days:0;
 
-  document.getElementById('sTotal').textContent = spent.toLocaleString('ru-RU') + ' ₽';
-  document.getElementById('sRemain').textContent = rem.toLocaleString('ru-RU') + ' ₽';
-  document.getElementById('sDays').textContent = daysLeft;
-  document.getElementById('sDaily').textContent = Math.round(daily).toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('sTotal').textContent=spent.toLocaleString('ru-RU')+' ₽';
+  document.getElementById('sRemain').textContent=rem.toLocaleString('ru-RU')+' ₽';
+  document.getElementById('sDays').textContent=days;
+  document.getElementById('sDaily').textContent=Math.round(daily).toLocaleString('ru-RU')+' ₽';
 
-  const catMap = {};
-  currentMonthExpenses.forEach(e => catMap[e.category] = (catMap[e.category] || 0) + e.amount);
-  
-  const labels = Object.keys(catMap);
-  const data = Object.values(catMap);
-  const colors = labels.map(l => C[l] || '#64748b');
+  const catMap={};
+  cur.forEach(e=>catMap[e.category]=(catMap[e.category]||0)+e.amount);
+  const labels=Object.keys(catMap),data=Object.values(catMap),colors=labels.map(l=>C[l]||'#64748b');
 
-  if (c1) c1.destroy();
-  c1 = new Chart(document.getElementById('cCat'), {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
-    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } }
-  });
+  if(c1)c1.destroy();
+  c1=new Chart(document.getElementById('cCat'),{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8'}}}}});
+  if(c2)c2.destroy();
+  c2=new Chart(document.getElementById('cBudget'),{type:'doughnut',data:{labels:['Потрачено','Осталось'],datasets:[{data:[spent,rem],backgroundColor:['#ef4441','#4ade80'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8'}}}}});
 
-  if (c2) c2.destroy();
-  c2 = new Chart(document.getElementById('cBudget'), {
-    type: 'doughnut',
-    data: { labels: ['Потрачено', 'Осталось'], datasets: [{ data: [spent, rem], backgroundColor: ['#ef4441', '#4ade80'], borderWidth: 0 }] },
-    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } }
-  });
-
-  const el = document.getElementById('list');
-  if (!currentMonthExpenses.length) {
-    el.innerHTML = '<div class="empty">Нет расходов за этот месяц</div>';
-  } else {
-    currentMonthExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
-    el.innerHTML = currentMonthExpenses.map(e => `
-      <div class="item">
-        <div class="left">
-          <span class="badge" style="background:${C[e.category]}22;color:${C[e.category]}">${e.category}</span>
-          <span class="desc">${e.description || '—'}</span>
-          <span class="date">${new Date(e.date).toLocaleDateString('ru-RU')}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <span class="amount" style="color:${C[e.category]}">−${e.amount.toLocaleString('ru-RU')} ₽</span>
-        </div>
-      </div>
-    `).join('');
-  }
+  const el=document.getElementById('list');
+  if(!cur.length){el.innerHTML='<div class="empty">Нет расходов за этот месяц</div>';return}
+  cur.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  el.innerHTML=cur.map(e=>`<div class="item"><div class="left"><span class="badge" style="background:${C[e.category]}22;color:${C[e.category]}">${e.category}</span><span class="desc">${e.description||'—'}</span><span class="date">${new Date(e.date).toLocaleDateString('ru-RU')}</span></div><div style="display:flex;align-items:center;gap:12px"><span class="amount" style="color:${C[e.category]}">−${e.amount.toLocaleString('ru-RU')} ₽</span><button class="del" onclick="delExp(${e.id})">✕</button></div></div>`).join('');
 }
 
 fetchData();
